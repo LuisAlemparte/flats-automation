@@ -11,11 +11,13 @@ unknown until the bank CSV says.
 - Out: on the 3rd, WhatsApp to father: "Flat 2 and 5 haven't paid."
        Draft reminder email in his Drafts. Nothing sent automatically.
 
+
 ## Project 2 — Repair tracker
 - In: tenant emails
 - Does: classify (repair / follow-up / rent question / other), log repairs
   in a sheet with status, draft a reply in his voice, look up status on follow-ups
 - Out: draft in Drafts + WhatsApp ping. Reminder to him if a repair is open > 14 days.
+data/emails_labelled.csv
 
 ## Rules
 - He only answers yes/no. Email and WhatsApp only, no new apps.
