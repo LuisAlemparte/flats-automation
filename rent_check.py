@@ -11,7 +11,11 @@ with open("data/umsaetze.csv", encoding="utf-8") as f:
             print(row["Beguenstigter/Zahlungspflichtiger"], amount)
             for surname in tenants:
                 if surname in row["Beguenstigter/Zahlungspflichtiger"]:
-                    paid.add(surname)
+                    expected = tenants[surname]
+                    if abs(amount - expected) <=10:
+                        paid.add(surname)
+                    elif amount < expected - 10:
+                        print(f"UNDERPAID: {surname} paid{amount} of {expected}")
 for name in tenants:
     if name not in paid:
         print(f"MISSING: {name} ({tenants[name]} €)")
