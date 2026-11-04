@@ -1,2 +1,2 @@
 # flats-automation
-Building 27 -29 Karlsruhe
+Rent monitoring and repair tracking for a small residential portfolio — Python + Claude API
