@@ -1,30 +1,26 @@
-# Killisfeldstraße 27+29 — Automation
+# Killisfeldstraße 27+29 — property operations system
 
-## Problem
-Father manages two buildings by email and phone. Tenants pay late, repair
-requests get forgotten, tenants ask again. He says 5 h/month; real number
-unknown until the bank CSV says.
+16 units (15 let, 1 vacant: 29 EG links) plus garages, Karlsruhe-Durlach.
+Built and operated by me; my father is the owner and data source.
 
-## Project 1 — Rent monitoring
-- In: Sparkasse CSV export (90 days) + tenant list (flat, name, rent, due day)
-- Does: match every transfer to a tenant → paid / unpaid per flat per month
-- Out: on the 3rd, WhatsApp to father: "Flat 2 and 5 haven't paid."
-       Draft reminder email in his Drafts. Nothing sent automatically.
+## Project 1 — Rent reconciliation (running since 5 Nov 2026)
+- In: Sparkasse MT940 export, tenants.csv (payer IBAN, expected total, valid_from)
+- Match by IBAN, not name. Expected per tenant per month; later rows replace earlier.
+- Outcomes: ok (±10 €) / underpaid / overpaid / missing. Rent due 3rd working day.
+- Known rules: Azal 1450 is correct; Hirmer +47/month is a held credit; Kaya garage 45 € from same account.
+- Backlog: payments in last 3 days count for next month (Rashidi M.); separate
+  Heizkosten/Nachzahlung lump sums from rent; tolerance_over column; garage rows; monthly PDF/WhatsApp summary.
+- First run: 15/15 tenants matched for Sep–Oct; 9 anomalies flagged, 2 real, 7 missing rules.
 
+## Project 2 — Repair & request tracker (Dec 2026)
+- Tenant emails/WhatsApp → classify (repair / payment / question / other) with Claude
+- Eval set: data/emails_labelled.csv, 20 hand-labelled; measured per category
+- Tickets with status; draft reply in owner's voice; reminder if open > 14 days
+- Ticket #1: Braun, balcony, pays "unter Vorbehalt"
 
-## Project 2 — Repair tracker
-- In: tenant emails
-- Does: classify (repair / follow-up / rent question / other), log repairs
-  in a sheet with status, draft a reply in his voice, look up status on follow-ups
-- Out: draft in Drafts + WhatsApp ping. Reminder to him if a repair is open > 14 days.
-data/emails_labelled.csv
+## Project 3 — Dashboard & automation (Jan–Feb 2027)
+- Scheduled run, WhatsApp alerts, FastAPI + Postgres, dashboard for all units
+- Mietspiegel gap analysis per flat
 
-## Rules
-- He only answers yes/no. Email and WhatsApp only, no new apps.
-- Nothing goes to a tenant without his confirmation (first two months).
-- Unsure → do nothing and say so.
-
-## Need from him
-- Last 3 months Sparkasse CSV
-- Tenant list with amounts and due days
-- 20–30 old tenant emails (later)
+## Private data
+tenants.csv and bank exports are gitignored.
