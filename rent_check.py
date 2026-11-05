@@ -41,8 +41,15 @@ for t in transactions:
 for month in months:
     print(f"\n=== {month} ===")
     for iban, rows in tenants.items():
-        expected = sum(float(r["expected"]) for r in rows)
-        names = " + ".join(r["tenant"] for r in rows)
+        active = {}
+        for r in rows:
+            if r["valid_from"][:7] <= month:
+                active[r["flat"]] = r
+        active = list(active.values())
+        if not active:
+            continue
+        expected = sum(float(r["expected"]) for r in active)
+        names = " + ".join(r["tenant"] for r in active)
         got = received.get((iban, month), 0)
         if got == 0:
             print(f"MISSING    {names:25s} expected {expected:.0f}")
