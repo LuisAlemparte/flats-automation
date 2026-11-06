@@ -1,4 +1,5 @@
 import csv
+import os
 import re
 from collections import defaultdict
 
@@ -56,9 +57,13 @@ for t in transactions:
         other[t["month"]].append((t["iban"], t["amount"], t["text"][:50]))
 
 # Compare per month, per tenant
-months = ["2026-09", "2026-10"]
+months = sorted({t["month"] for t in transactions})[1:-1]
+os.makedirs("output", exist_ok=True)
 for month in months:
     print(f"\n=== {month} ===")
+    out = open(f"output/{month}.csv", "w", encoding="utf-8", newline="")
+    writer = csv.writer(out, delimiter=",")
+    writer.writerow(["tenant", "expected", "recieved", "status", "difference"])
     for iban, rows in tenants.items():
         active = {}
         for r in rows:
@@ -71,14 +76,16 @@ for month in months:
         names = " + ".join(r["tenant"] for r in active)
         got = received.get((iban, month), 0)
         if got == 0:
-            print(f"MISSING    {names:25s} expected {expected:.0f}")
-        elif abs(got - expected) <= 10:
-            print(f"ok         {names:25s} {got:.0f}")
+            status = "MISSING"
+        elif abs(got - expected) <=10:
+            status = "ok"
         elif got < expected:
-            print(f"UNDERPAID  {names:25s} {got:.0f} of {expected:.0f}")
+            status = "UNDERPAID"
         else:
-            print(f"OVERPAID   {names:25s} {got:.0f} of {expected:.0f} (+{got-expected:.0f})")
-
+            status = "OVERPAID"
+        print(f"{status:10s} {names:25s} {got:.0f} of {expected:.0f}")
+        writer.writerow([names, f"{expected:.0f}", f"{got:.0f}", status, f"{got - expected:.0f}"])
+    out.close()
     if other[month]:
         print("  -- other transfers from tenants --")
         for iban, amount, text in other[month]:
