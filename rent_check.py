@@ -41,11 +41,22 @@ for line in lines:
         transactions[-1]["text"] = fields.get("20", "")
 
 print(len(transactions), "transactions")
+
+# Sort each tenant transfer into rent or other
 received = defaultdict(float)
+other = defaultdict(list)
 for t in transactions:
-    if t["amount"] > 0 and t["iban"] in tenants:
+    if t["amount"] <= 0 or t["iban"] not in tenants:
+        continue
+    expected_any = [float(r["expected"]) for r in tenants[t["iban"]]]
+    is_rent = "miete" in t["text"].lower() or any(abs(t["amount"] - e) <= 10 for e in expected_any)
+    if is_rent:
         received[(t["iban"], t["month"])] += t["amount"]
-        months = ["2026-09", "2026-10"]
+    else:
+        other[t["month"]].append((t["iban"], t["amount"], t["text"][:50]))
+
+# Compare per month, per tenant
+months = ["2026-09", "2026-10"]
 for month in months:
     print(f"\n=== {month} ===")
     for iban, rows in tenants.items():
@@ -67,3 +78,9 @@ for month in months:
             print(f"UNDERPAID  {names:25s} {got:.0f} of {expected:.0f}")
         else:
             print(f"OVERPAID   {names:25s} {got:.0f} of {expected:.0f} (+{got-expected:.0f})")
+
+    if other[month]:
+        print("  -- other transfers from tenants --")
+        for iban, amount, text in other[month]:
+            name = tenants[iban][0]["tenant"]
+            print(f"  {name:20s} {amount:8.2f}  {text}")
