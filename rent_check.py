@@ -21,7 +21,15 @@ transactions = []
 for line in lines:
     if line.startswith(":61:"):
         date = line[4:10]
-        month = f"20{date[:2]}-{date[2:4]}"
+        year = int("20" + date[:2])
+        mon = int(date[2:4])
+        day = int(date[4:6])
+        if day >= 29:
+            mon += 1
+            if mon == 13:
+                mon = 1 
+                year += 1
+        month = f"{year}-{mon:02d}"
         m = re.search(r"([CD])R?([\d,]+)", line[10:])
         amount = float(m.group(2).replace(",", "."))
         if m.group(1) == "D":
