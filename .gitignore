@@ -3,3 +3,4 @@ data/umsaetze.txt
 data/*.csv
 !data/emails_labelled.csv
 output/
+.env
