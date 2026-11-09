@@ -2,14 +2,15 @@ import csv
 import os
 import re
 from collections import defaultdict
+BUFFER = 3 # days after due_day before a payment counts as late
 
 tenants = {}
 with open("data/tenants.csv", encoding="utf-8") as f:
     for row in csv.DictReader(f, delimiter=";"):
         tenants.setdefault(row["iban"], []).append(row)
         
-        with open("data/umsaetze.txt", encoding="utf-8") as f:
-            raw = f.read()
+with open("data/umsaetze.txt", encoding="utf-8") as f:
+    raw = f.read()
 
 lines = []
 for line in raw.splitlines():
@@ -25,7 +26,9 @@ for line in lines:
         year = int("20" + date[:2])
         mon = int(date[2:4])
         day = int(date[4:6])
+        paid_day = day
         if day >= 29:
+            paid_day = 0
             mon += 1
             if mon == 13:
                 mon = 1 
@@ -35,7 +38,7 @@ for line in lines:
         amount = float(m.group(2).replace(",", "."))
         if m.group(1) == "D":
             amount = -amount
-        transactions.append({"month": month, "amount": amount, "iban": "", "text": ""})
+        transactions.append({"month": month, "day": paid_day, "amount": amount, "iban": "", "text": ""})
     elif line.startswith(":86:") and transactions:
         fields = dict(re.findall(r"\?(\d\d)([^?]*)", line))
         transactions[-1]["iban"] = fields.get("31", "")
@@ -45,6 +48,7 @@ print(len(transactions), "transactions")
 
 # Sort each tenant transfer into rent or other
 received = defaultdict(float)
+paid_on = defaultdict(int)
 other = defaultdict(list)
 for t in transactions:
     if t["amount"] <= 0 or t["iban"] not in tenants:
@@ -53,6 +57,7 @@ for t in transactions:
     is_rent = "miete" in t["text"].lower() or any(abs(t["amount"] - e) <= 10 for e in expected_any)
     if is_rent:
         received[(t["iban"], t["month"])] += t["amount"]
+        paid_on[(t["iban"], t["month"])] = max(paid_on[(t["iban"], t["month"])], t["day"])
     else:
         other[t["month"]].append((t["iban"], t["amount"], t["text"][:50]))
 
@@ -63,7 +68,7 @@ for month in months:
     print(f"\n=== {month} ===")
     out = open(f"output/{month}.csv", "w", encoding="utf-8", newline="")
     writer = csv.writer(out, delimiter=",")
-    writer.writerow(["tenant", "expected", "recieved", "status", "difference"])
+    writer.writerow(["tenant", "expected", "recieved", "status", "difference", "days_late"])
     for iban, rows in tenants.items():
         active = {}
         for r in rows:
@@ -75,16 +80,20 @@ for month in months:
         expected = sum(float(r["expected"]) for r in active)
         names = " + ".join(r["tenant"] for r in active)
         got = received.get((iban, month), 0)
+        due = int(active[0]["due_day"])
+        days_late = max(0, paid_on[(iban, month)] - due - BUFFER)
         if got == 0:
             status = "MISSING"
-        elif abs(got - expected) <=10:
+        elif abs(got - expected) <= 10 and days_late > 0:
+            status = "LATE"
+        elif abs(got - expected) <= 10:
             status = "ok"
         elif got < expected:
             status = "UNDERPAID"
         else:
             status = "OVERPAID"
-        print(f"{status:10s} {names:25s} {got:.0f} of {expected:.0f}")
-        writer.writerow([names, f"{expected:.0f}", f"{got:.0f}", status, f"{got - expected:.0f}"])
+        print(f"{status:10s} {names:25s} {got:.0f} of {expected:.0f}   paid day {paid_on[(iban, month)]:2d}  late {days_late}")
+        writer.writerow([names, f"{expected:.0f}", f"{got:.0f}", status, f"{got - expected:.0f}", days_late])
     out.close()
     if other[month]:
         print("  -- other transfers from tenants --")
