@@ -36,11 +36,15 @@ Regeln:
 def classify(text):
     response = client.messages.create(
         model="claude-haiku-5-5",
-        max_tokens=50,
+        max_tokens=1000,
         messages=[{"role": "user", "content": PROMPT.format(text=text)}],
     )
-    answer = "".join(b.text for b in response.content if b.type == "text").strip().low()
-    return answer if answer in CATEGORIES else "other"
+    answer = "".join(b.text for b in response.content if b.type == "text").strip().lower()
+    if answer not in CATEGORIES:
+        print(f"    [unexpected answer: {answer!r}]")
+        return "other"
+    return answer
+    
 
 def evaluate():
     correct = 0
@@ -103,7 +107,12 @@ def draft_reply(ticket_id):
         messages=[{"role": "user", "content": f"E-Mail von Mieter {ticket['tenant']} ({ticket['category']}):\n\n{ticket['text']}\n\nSchreibe die Antwort."}],
     )
     print(f"--- Entwurf für Ticket #{ticket_id} ({ticket['tenant']}) ---\n")
-    print("".join(block.text for block in response.content if block.type == "text"))
+    text = "".join(block.text for block in response.content if block.type == "text")
+    print(text)
+    os.makedirs("output/antworten", exist_ok=True)
+    with open(f"output/antworten/ticket-{ticket_id}.md", "w", encoding="utf-8") as f:
+        f.write(f"# Ticket #{ticket_id} – {ticket['tenant']} ({ticket['category']})\n\n")
+        f.write(f"## Mieter schrieb\n\n{ticket['text']}\n\n## Entwurf\n\n{text}\n")
 
 
 if len(sys.argv) > 1 and sys.argv[1] == "inbox":
