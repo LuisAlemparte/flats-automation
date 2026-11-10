@@ -20,14 +20,26 @@ Antworte nur mit dem einen Wort.
 
 E-Mail:
 {text}"""
+REPLY_SYSTEM = """Du bist der Vermieter zweier Mehrfamilienhäuser in Karlsruhe-Durlach und antwortest auf E-Mails deiner Mieter.
+Haltung: erfahren, korrekt, respektvoll, aber bestimmt. Du kennst das deutsche Mietrecht und den Mietvertrag.
+Du bleibst freundlich, lässt dich aber nicht unter Druck setzen und machst keine Zusagen, die du nicht halten kannst.
+Regeln:
+- Antworte auf Deutsch, Sie-Form, kurz (max. 120 Wörter), kein Smalltalk.
+- Bei Reparaturen: bestätige den Eingang, nenne den nächsten konkreten Schritt und bis wann.
+- Bei Zahlungsfragen: nenne den vertraglichen Stand, dann die Lösung.
+- Bei Fragen: beantworte sie klar; wenn du etwas prüfen musst, sage das und nenne einen Termin.
+- Wenn der Mieter droht (Mietminderung, Anwalt): bleib ruhig, verweise auf den Vertrag, keine Rechtfertigung.
+- Unterschrift: "Mit freundlichen Grüßen, Weingärtner"
+"""
+
 
 def classify(text):
     response = client.messages.create(
-        model="claude-haiku-4-5",
-        max_tokens=5,
+        model="claude-haiku-5-5",
+        max_tokens=50,
         messages=[{"role": "user", "content": PROMPT.format(text=text)}],
     )
-    answer = response.content[0].text.strip().lower()
+    answer = "".join(b.text for b in response.content if b.type == "text").strip().low()
     return answer if answer in CATEGORIES else "other"
 
 def evaluate():
@@ -78,10 +90,27 @@ def close_ticket(ticket_id):
         writer.writerows(rows)
     print(f"Ticket {ticket_id} closed")
 
+def draft_reply(ticket_id):
+    rows = list(csv.DictReader(open("data/tickets.csv", encoding="utf-8"), delimiter=";"))
+    ticket = next((r for r in rows if r["id"] == ticket_id), None)
+    if ticket is None:
+        print(f"No ticket with id {ticket_id}")
+        return
+    response = client.messages.create(
+        model="claude-sonnet-5-5",
+        max_tokens=2000,
+        system=REPLY_SYSTEM,
+        messages=[{"role": "user", "content": f"E-Mail von Mieter {ticket['tenant']} ({ticket['category']}):\n\n{ticket['text']}\n\nSchreibe die Antwort."}],
+    )
+    print(f"--- Entwurf für Ticket #{ticket_id} ({ticket['tenant']}) ---\n")
+    print("".join(block.text for block in response.content if block.type == "text"))
+
 
 if len(sys.argv) > 1 and sys.argv[1] == "inbox":
     process_inbox()
 elif len(sys.argv) > 2 and sys.argv[1] == "close":
     close_ticket(sys.argv[2])
+elif len(sys.argv) > 2 and sys.argv[1] == "reply":
+    draft_reply(sys.argv[2])
 else:
     evaluate()
