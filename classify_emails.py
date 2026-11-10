@@ -29,6 +29,7 @@ Regeln:
 - Bei Zahlungsfragen: nenne den vertraglichen Stand, dann die Lösung.
 - Bei Fragen: beantworte sie klar; wenn du etwas prüfen musst, sage das und nenne einen Termin.
 - Wenn der Mieter droht (Mietminderung, Anwalt): bleib ruhig, verweise auf den Vertrag, keine Rechtfertigung.
+- Anrede: immer "Guten Tag [Anrede] <Nachname>," – das [Anrede] füllt der Vermieter aus (Herr/Frau). Nie selbst raten.
 - Unterschrift: "Mit freundlichen Grüßen, Weingärtner"
 """
 
@@ -44,7 +45,7 @@ def classify(text):
         print(f"    [unexpected answer: {answer!r}]")
         return "other"
     return answer
-    
+
 
 def evaluate():
     correct = 0
@@ -56,13 +57,14 @@ def evaluate():
         mark = "ok " if hit else "XX "
         print(f"{mark} {row['id']:>3}  expected {row['category']:9s} got {predicted:9s} {row['text'][:50]}")
     print(f"\nAccuracy: {correct}/{len(rows)} = {correct / len(rows):.0%}")
+    return correct
 
 def process_inbox():
     tickets_path = "data/tickets.csv"
     existing = []
     if os.path.exists(tickets_path):
         existing = list(csv.DictReader(open(tickets_path, encoding="utf-8"), delimiter=";"))
-    next_id = len(existing) + 1
+    next_id = max((int(row["id"]) for row in existing), default=0) + 1
     seen = {row["text"] for row in existing}
 
     with open(tickets_path, "a", encoding="utf-8", newline="") as out:
@@ -79,6 +81,9 @@ def process_inbox():
 
 def close_ticket(ticket_id):
     tickets_path = "data/tickets.csv"
+    if not os.path.exists(tickets_path):
+        print("No tickets yet")
+        return
     rows = list(csv.DictReader(open(tickets_path, encoding="utf-8"), delimiter=";"))
     found = False
     for row in rows:
@@ -121,5 +126,8 @@ elif len(sys.argv) > 2 and sys.argv[1] == "close":
     close_ticket(sys.argv[2])
 elif len(sys.argv) > 2 and sys.argv[1] == "reply":
     draft_reply(sys.argv[2])
+elif len(sys.argv) > 1 and sys.argv[1] == "eval2":
+    a, b = evaluate(), evaluate()
+    print(f"\nTwo runs: {a} and {b} correct")
 else:
     evaluate()
