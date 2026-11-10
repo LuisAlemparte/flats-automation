@@ -61,11 +61,43 @@ for t in transactions:
     else:
         other[t["month"]].append((t["iban"], t["amount"], t["text"][:50]))
 
+STATUS_DE = {"MISSING": "FEHLT", "LATE": "VERSPÄTET", "UNDERPAID": "ZU WENIG", "OVERPAID": "ZU VIEL"}
+
+
+def write_report(month, results, extras):
+    total_expected = sum(r["expected"] for r in results)
+    total_got = sum(r["got"] for r in results)
+    problems = [r for r in results if r["status"] != "ok"]
+    lines = [f"# Mietbericht {month}", ""]
+    lines.append(f"**Soll:** {total_expected:,.0f} €  **Ist:** {total_got:,.0f} €  **Differenz:** {total_got - total_expected:+,.0f} €".replace(",", "."))
+    lines.append(f"**Mieter:** {len(results)}  **ohne Auffälligkeit:** {len(results) - len(problems)}")
+    lines += ["", "## Auffälligkeiten", ""]
+    if not problems:
+        lines.append("Keine.")
+    for r in problems:
+        detail = f"{r['got']:.0f} von {r['expected']:.0f} €"
+        if r["status"] == "LATE":
+            detail += f", {r['days_late']} Tage zu spät"
+        lines.append(f"- **{STATUS_DE[r['status']]}** {r['name']}: {detail}")
+    if extras:
+        lines += ["", "## Sonstige Eingänge von Mietern", ""]
+        for iban, amount, text in extras:
+            lines.append(f"- {tenants[iban][0]['tenant']}: {amount:.2f} € ({text.replace('SVWZ+', '')})")
+    if os.path.exists("data/tickets.csv"):
+        open_tickets = [t for t in csv.DictReader(open("data/tickets.csv", encoding="utf-8"), delimiter=";") if t["status"] == "open"]
+        lines += ["", f"## Offene Anliegen ({len(open_tickets)})", ""]
+        for t in open_tickets:
+            lines.append(f"- #{t['id']} {t['date']} {t['tenant']} [{t['category']}]: {t['text'][:80]}")
+    with open(f"output/Bericht-{month}.md", "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
 # Compare per month, per tenant
 months = sorted({t["month"] for t in transactions})[1:-1]
 os.makedirs("output", exist_ok=True)
 for month in months:
     print(f"\n=== {month} ===")
+    results = []
     out = open(f"output/{month}.csv", "w", encoding="utf-8", newline="")
     writer = csv.writer(out, delimiter=",")
     writer.writerow(["tenant", "expected", "recieved", "status", "difference", "days_late"])
@@ -93,8 +125,10 @@ for month in months:
         else:
             status = "OVERPAID"
         print(f"{status:10s} {names:25s} {got:.0f} of {expected:.0f}   paid day {paid_on[(iban, month)]:2d}  late {days_late}")
+        results.append({"name": names, "expected": expected, "got": got, "status": status, "days_late": days_late})
         writer.writerow([names, f"{expected:.0f}", f"{got:.0f}", status, f"{got - expected:.0f}", days_late])
     out.close()
+    write_report(month, results, other[month])
     if other[month]:
         print("  -- other transfers from tenants --")
         for iban, amount, text in other[month]:
