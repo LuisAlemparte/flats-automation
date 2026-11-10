@@ -43,12 +43,15 @@ def process_inbox():
     if os.path.exists(tickets_path):
         existing = list(csv.DictReader(open(tickets_path, encoding="utf-8"), delimiter=";"))
     next_id = len(existing) + 1
+    seen = {row["text"] for row in existing}
 
     with open(tickets_path, "a", encoding="utf-8", newline="") as out:
         writer = csv.writer(out, delimiter=";")
         if not existing:
             writer.writerow(["id", "date", "tenant", "category", "status", "text"])
         for row in csv.DictReader(open("data/inbox.csv", encoding="utf-8"), delimiter=";"):
+            if row ["text"] in seen:
+                continue
             category = classify(row["text"])
             writer.writerow([next_id, row["date"], row["tenant"], category, "open", row["text"]])
             print(f"#{next_id}  {row['date']}  {row['tenant']:12s} {category:9s} {row['text'][:50]}")
