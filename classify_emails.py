@@ -10,12 +10,16 @@ client = anthropic.Anthropic()
 CATEGORIES = ["repair", "payment", "question", "other"]
 
 PROMPT = """Du bist Assistent einer Hausverwaltung. Ordne die folgende Mieter-E-Mail
-genau einer Kategorie zu: repair, payment, question, other.
+genau einer Kategorie zu:
+- repair: etwas in der Wohnung oder im Haus ist defekt, verschmutzt oder stört und der Vermieter muss handeln
+- payment: es geht um die Mietzahlung des Mieters (überwiesen, verspätet, zu viel/zu wenig, Teilzahlung, neues Konto), auch wenn es als Frage formuliert ist
+- question: der Mieter fragt etwas oder bittet um eine Entscheidung oder Erklärung (Kündigung, Nachbarn, Erlaubnis, Termine, Abrechnung)
+- other: reine Information ohne Handlungsbedarf (Danke, Urlaub, Dokument anbei)
+Wenn mehrere passen, nimm die, bei der der Vermieter handeln muss.
 Antworte nur mit dem einen Wort.
 
 E-Mail:
 {text}"""
-
 
 def classify(text):
     response = client.messages.create(
