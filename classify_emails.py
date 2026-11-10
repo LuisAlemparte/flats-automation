@@ -50,14 +50,34 @@ def process_inbox():
         if not existing:
             writer.writerow(["id", "date", "tenant", "category", "status", "text"])
         for row in csv.DictReader(open("data/inbox.csv", encoding="utf-8"), delimiter=";"):
-            if row ["text"] in seen:
+            if row["text"] in seen:
                 continue
             category = classify(row["text"])
             writer.writerow([next_id, row["date"], row["tenant"], category, "open", row["text"]])
             print(f"#{next_id}  {row['date']}  {row['tenant']:12s} {category:9s} {row['text'][:50]}")
             next_id += 1
 
+def close_ticket(ticket_id):
+    tickets_path = "data/tickets.csv"
+    rows = list(csv.DictReader(open(tickets_path, encoding="utf-8"), delimiter=";"))
+    found = False
+    for row in rows:
+        if row["id"] == ticket_id:
+            row["status"] = "done"
+            found = True
+    if not found:
+        print(f"No ticket with id {ticket_id}")
+        return
+    with open(tickets_path, "w", encoding="utf-8", newline="") as out:
+        writer = csv.DictWriter(out, fieldnames=rows[0].keys(), delimiter=";")
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"Ticket {ticket_id} closed")
+
+
 if len(sys.argv) > 1 and sys.argv[1] == "inbox":
     process_inbox()
+elif len(sys.argv) > 2 and sys.argv[1] == "close":
+    close_ticket(sys.argv[2])
 else:
     evaluate()
