@@ -4,3 +4,4 @@ data/*.csv
 !data/emails_labelled.csv
 output/
 .env
+data/reply_eval.md
