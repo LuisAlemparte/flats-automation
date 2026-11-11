@@ -5,3 +5,5 @@ data/*.csv
 output/
 .env
 data/reply_eval.md
+data/contracts/*
+!data/contracts/README.md
