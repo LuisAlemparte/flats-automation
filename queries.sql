@@ -28,3 +28,25 @@ SELECT
 FROM active a
 LEFT JOIN rent r ON r.tenant = a.tenant
 ORDER BY status, a.tenant;
+-- Lateness history: for every tenant and month, the day rent arrived and days late
+-- (payments on the 29th or later count for next month, so paid_day = 0 = early)
+WITH paid AS (
+    SELECT t.tenant, t.due_day, x.month,
+           CASE WHEN CAST(SUBSTR(x.date, 9, 2) AS INTEGER) >= 29 THEN 0
+                ELSE CAST(SUBSTR(x.date, 9, 2) AS INTEGER) END AS day
+    FROM tenants t
+    JOIN transactions x ON x.iban = t.iban AND x.amount > 0
+    WHERE LOWER(x.text) LIKE '%miete%' OR ABS(x.amount - t.expected) <= 10
+)
+SELECT tenant, month, MAX(day) AS paid_day, due_day,
+       MAX(0, MAX(day) - due_day - 3) AS days_late
+FROM paid
+GROUP BY tenant, month
+HAVING days_late > 0
+ORDER BY days_late DESC;
+
+-- Open tickets by category
+SELECT category, COUNT(*) AS open_tickets
+FROM tickets
+WHERE status = 'open'
+GROUP BY category;
