@@ -7,3 +7,4 @@ output/
 data/reply_eval.md
 data/contracts/*
 !data/contracts/README.md
+data/flats.db
