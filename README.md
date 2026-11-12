@@ -31,11 +31,21 @@ took an afternoon with paper statements. The owner's own sheet had wrong rents f
   cites the contract, never invents deadlines or firms) and saves it to `output/antworten/`
 - no argument: runs the eval below
 
+
+**`build_db.py` + `queries.sql` — SQL layer (since 12 Nov 2026)**
+- `build_db.py` rebuilds `data/flats.db` (SQLite) from the CSVs and the bank export:
+  tables `tenants`, `transactions`, `tickets`
+- `queries.sql` holds the questions the owner asks, as plain SQL:
+  rent per tenant per month with status (one query, verified row-for-row against `rent_check.py`),
+  lateness history per tenant, open tickets by category
+- New questions are a query, not a script: "who has paid late more than once since August?" is five lines
+
 ## Results
 - Sep–Oct 2026: 28/28 payers matched. 9 anomalies flagged on the first run; after
   encoding three rules, 1 known credit remained. Two garages found not paying for 3 months.
 - Reconciling a month: **3 minutes instead of 2 afternoons** (owner's words).
 - Lateness data contradicted the owner's impression: 26 of 28 pay on time; two don't.
+- The SQL lateness query found a third sheet error: a garage tenant recorded as "never pays" pays two months at a time, for a different garage number than the sheet says.
 
 ## The eval, and what it taught me
 `data/emails_labelled.csv`: 30 hand-labelled German/English tenant emails, including
@@ -68,3 +78,9 @@ Runs aren't deterministic; a score is a snapshot.
 
 Needs `ANTHROPIC_API_KEY` in `.env`. Real tenant and bank data are gitignored;
 `data/emails_labelled.csv` is synthetic.
+## Thu 12 Nov — Week 7 (SQL)
+- Psets: songs 8/8, movies 14/14, fiftyville 3/3 (Bruce, New York City, Robin), all before 13:30
+- SELECT/WHERE/ORDER BY/LIMIT, COUNT/AVG/SUM, LIKE '%x%', nested SELECT ... IN (...), JOIN ... ON, DISTINCT
+- Two prompts: $ = shell, sqlite> = database. .schema/.tables/.quit only inside; cat file | sqlite3 db from outside
+- Flats: build_db.py → flats.db (tenants, transactions, tickets). Rent check as one query with WITH (CTE), LEFT JOIN, COALESCE, CASE WHEN; matches rent_check.py row for row
+- Lateness query: SUBSTR to cut the day out of a date, HAVING for grouped rows. Found Kaya S.O. pays 100 every 2 months for garage 5, sheet says 45 for garage 3
