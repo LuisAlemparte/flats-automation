@@ -93,6 +93,7 @@ def write_report(month, results, extras):
 
 
 # Compare per month, per tenant
+credit = defaultdict(float)  # overpayments carried to the next month, per IBAN
 months = sorted({t["month"] for t in transactions})[1:-1]
 os.makedirs("output", exist_ok=True)
 for month in months:
@@ -103,16 +104,27 @@ for month in months:
     writer.writerow(["tenant", "expected", "recieved", "status", "difference", "days_late"])
     for iban, rows in tenants.items():
         active = {}
+    current = {}
+    for rows in tenants.values():
         for r in rows:
-            if r["valid_from"][:7] <= month:
-                active[r["flat"]] = r
-        active = list(active.values())
-        if not active:
-            continue
+            key = (r["house"], r["flat"], r["tenant"])
+            if r["valid_from"][:7] <= month and (key not in current or r["valid_from"] > current[key]["valid_from"]):
+                current[key] = r
+    by_iban = defaultdict(list)
+    for r in current.values():
+        by_iban[r["iban"]].append(r)
+    for iban, active in by_iban.items():
+
+        
         expected = sum(float(r["expected"]) for r in active)
-        names = " + ".join(r["tenant"] for r in active)
+        names = " + ".join(dict.fromkeys(r["tenant"] for r in active))
         got = received.get((iban, month), 0)
-        due = int(active[0]["due_day"])
+        paid = got
+        got += credit[iban]
+        credit[iban] = max(0.0, got - expected) if got > expected + 10 else 0.0
+        if credit[iban]:
+            got = expected
+        due = max(int(r["due_day"]) for r in active)
         days_late = max(0, paid_on[(iban, month)] - due - BUFFER)
         if got == 0:
             status = "MISSING"
@@ -124,7 +136,7 @@ for month in months:
             status = "UNDERPAID"
         else:
             status = "OVERPAID"
-        print(f"{status:10s} {names:25s} {got:.0f} of {expected:.0f}   paid day {paid_on[(iban, month)]:2d}  late {days_late}")
+        print(f"{status:10s} {names:25s} {paid:.0f} of {expected:.0f}   paid day {paid_on[(iban, month)]:2d}  late {days_late}  credit {credit[iban]:.0f}")
         results.append({"name": names, "expected": expected, "got": got, "status": status, "days_late": days_late})
         writer.writerow([names, f"{expected:.0f}", f"{got:.0f}", status, f"{got - expected:.0f}", days_late])
     out.close()
@@ -134,3 +146,4 @@ for month in months:
         for iban, amount, text in other[month]:
             name = tenants[iban][0]["tenant"]
             print(f"  {name:20s} {amount:8.2f}  {text}")
+
