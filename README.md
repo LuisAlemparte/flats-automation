@@ -20,6 +20,8 @@ took an afternoon with paper statements. The owner's own sheet had wrong rents f
 - Separates rent from one-off transfers (Heizkosten, Nachzahlungen) by purpose text or amount
 - Payments in the last 3 days of a month count for the next month
 - Per-tenant `due_day` + 3-day buffer → `days_late`; status ok / LATE / UNDERPAID / OVERPAID / MISSING
+- Overpayments carried forward as credit (a tenant who pays two months at once is not "overpaid" then "missing")
+- A change of payer account mid-year is one row per period; the latest `valid_from` per flat wins
 - Writes one CSV per month and a one-page German owner report
   (`output/Bericht-YYYY-MM.md`: Soll/Ist, Auffälligkeiten, offene Anliegen)
 
@@ -45,7 +47,15 @@ took an afternoon with paper statements. The owner's own sheet had wrong rents f
   encoding three rules, 1 known credit remained. Two garages found not paying for 3 months.
 - Reconciling a month: **3 minutes instead of 2 afternoons** (owner's words).
 - Lateness data contradicted the owner's impression: 26 of 28 pay on time; two don't.
+- By 13 Nov the bank data had corrected the owner's sheet six times (two rents, eight garage amounts, two garage numbers, two names, one payer account). The monthly report now lists four real items and no sheet errors.
 - The SQL lateness query found a third sheet error: a garage tenant recorded as "never pays" pays two months at a time, for a different garage number than the sheet says.
+
+## The owner review
+The owner read the first three reply drafts and said what he would change. His words became
+persona rules (no firm or deadline named, "I'll look at it and then decide", two to five
+sentences, payment reservations not commented on). Round two: all three approved.
+That loop, draft → real user → rules → redraft, is the eval for the drafter; accuracy on a
+labelled set doesn't apply to free text.
 
 ## The eval, and what it taught me
 `data/emails_labelled.csv`: 30 hand-labelled German/English tenant emails, including
@@ -84,3 +94,8 @@ Needs `ANTHROPIC_API_KEY` in `.env`. Real tenant and bank data are gitignored;
 - Two prompts: $ = shell, sqlite> = database. .schema/.tables/.quit only inside; cat file | sqlite3 db from outside
 - Flats: build_db.py → flats.db (tenants, transactions, tickets). Rent check as one query with WITH (CTE), LEFT JOIN, COALESCE, CASE WHEN; matches rent_check.py row for row
 - Lateness query: SUBSTR to cut the day out of a date, HAVING for grouped rows. Found Kaya S.O. pays 100 every 2 months for garage 5, sheet says 45 for garage 3
+## Fri 13 Nov
+- rent_check: tenants keyed by (house, flat, tenant) so a payer-account switch (Fornasier → Daniele Spagnuolo) is one row per period; dict.fromkeys to dedupe names; credit carried forward per IBAN (Hirmer 47/month, Kaya S.O. 100)
+- Bank data corrected the sheet again: garages 7/10 swapped, 50 vs 55; Kaya garage 3 is the tenant, Kaya S.O. is garage 5
+- Owner review round 2: persona rules from his words (no firm/deadline, "Ich schaue es mir an", 2–5 sentences, Vorbehalt not commented)
+- Lesson: a paste that lands one indent too deep runs without error and silently prints only in one branch
