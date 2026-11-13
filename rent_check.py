@@ -79,6 +79,11 @@ def write_report(month, results, extras):
         if r["status"] == "LATE":
             detail += f", {r['days_late']} Tage zu spät"
         lines.append(f"- **{STATUS_DE[r['status']]}** {r['name']}: {detail}")
+    credits = [r for r in results if r["credit"] > 0]
+    if credits:
+        lines += ["", "## Guthaben (Vorauszahlungen)", ""]
+        for r in credits:
+            lines.append(f"- {r['name']}: {r['credit']:.0f} €")
     if extras:
         lines += ["", "## Sonstige Eingänge von Mietern", ""]
         for iban, amount, text in extras:
@@ -87,7 +92,7 @@ def write_report(month, results, extras):
         open_tickets = [t for t in csv.DictReader(open("data/tickets.csv", encoding="utf-8"), delimiter=";") if t["status"] == "open"]
         lines += ["", f"## Offene Anliegen ({len(open_tickets)})", ""]
         for t in open_tickets:
-            lines.append(f"- #{t['id']} {t['date']} {t['tenant']} [{t['category']}]: {t['text'][:80]}")
+            lines.append(f"- Nr. {t['id']} {t['date']} {t['tenant']} [{t['category']}]: {t['text'][:80]}")
     with open(f"output/Bericht-{month}.md", "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -137,7 +142,7 @@ for month in months:
         else:
             status = "OVERPAID"
         print(f"{status:10s} {names:25s} {paid:.0f} of {expected:.0f}   paid day {paid_on[(iban, month)]:2d}  late {days_late}  credit {credit[iban]:.0f}")
-        results.append({"name": names, "expected": expected, "got": got, "status": status, "days_late": days_late})
+        results.append({"name": names, "expected": expected, "got": got, "status": status, "days_late": days_late, "credit": credit[iban]})
         writer.writerow([names, f"{expected:.0f}", f"{got:.0f}", status, f"{got - expected:.0f}", days_late])
     out.close()
     write_report(month, results, other[month])
