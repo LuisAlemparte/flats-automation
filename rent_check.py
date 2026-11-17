@@ -4,11 +4,16 @@ import re
 from collections import defaultdict
 BUFFER = 3 # days after due_day before a payment counts as late
 
-tenants = {}
-with open("data/tenants.csv", encoding="utf-8") as f:
-    for row in csv.DictReader(f, delimiter=";"):
-        tenants.setdefault(row["iban"], []).append(row)
-        
+def load_tenants(path):
+    tenants = {}
+    with open(path, encoding="utf-8") as f:
+        for row in csv.DictReader(f, delimiter=";"):
+            tenants.setdefault(row["iban"], []).append(row)
+    return tenants
+
+
+tenants = load_tenants("data/tenants.csv")
+
 with open("data/umsaetze.txt", encoding="utf-8") as f:
     raw = f.read()
 
