@@ -12,64 +12,68 @@ def load_tenants(path):
     return tenants
 
 
-tenants = load_tenants("data/tenants.csv")
 
-with open("data/umsaetze.txt", encoding="utf-8") as f:
-    raw = f.read()
+def parse_mt940(path):
+    with open(path, encoding="utf-8") as f:
+        raw = f.read()
 
-lines = []
-for line in raw.splitlines():
-    if line.startswith(":"):
-        lines.append(line)
-    elif lines:
-        lines[-1] += line
+    # MT940 wraps long lines; a line not starting with ':' continues the previous one
+    lines = []
+    for line in raw.splitlines():
+        if line.startswith(":"):
+            lines.append(line)
+        elif lines:
+            lines[-1] += line
 
-transactions = []
-for line in lines:
-    if line.startswith(":61:"):
-        date = line[4:10]
-        year = int("20" + date[:2])
-        mon = int(date[2:4])
-        day = int(date[4:6])
-        paid_day = day
-        if day >= 29:
-            paid_day = 0
-            mon += 1
-            if mon == 13:
-                mon = 1 
-                year += 1
-        month = f"{year}-{mon:02d}"
-        m = re.search(r"([CD])R?([\d,]+)", line[10:])
-        amount = float(m.group(2).replace(",", "."))
-        if m.group(1) == "D":
-            amount = -amount
-        transactions.append({"month": month, "day": paid_day, "amount": amount, "iban": "", "text": ""})
-    elif line.startswith(":86:") and transactions:
-        fields = dict(re.findall(r"\?(\d\d)([^?]*)", line))
-        transactions[-1]["iban"] = fields.get("31", "")
-        transactions[-1]["text"] = fields.get("20", "")
+    transactions = []
+    for line in lines:
+        if line.startswith(":61:"):
+            date = line[4:10]
+            year = int("20" + date[:2])
+            mon = int(date[2:4])
+            day = int(date[4:6])
+            paid_day = day
+            if day >= 29:
+                paid_day = 0
+                mon += 1
+                if mon == 13:
+                    mon = 1
+                    year += 1
+            month = f"{year}-{mon:02d}"
+            m = re.search(r"([CD])R?([\d,]+)", line[10:])
+            amount = float(m.group(2).replace(",", "."))
+            if m.group(1) == "D":
+                amount = -amount
+            transactions.append({"month": month, "day": paid_day, "amount": amount, "iban": "", "text": ""})
+        elif line.startswith(":86:") and transactions:
+            fields = dict(re.findall(r"\?(\d\d)([^?]*)", line))
+            transactions[-1]["iban"] = fields.get("31", "")
+            transactions[-1]["text"] = fields.get("20", "")
+    return transactions
 
-print(len(transactions), "transactions")
 
-# Sort each tenant transfer into rent or other
-received = defaultdict(float)
-paid_on = defaultdict(int)
-other = defaultdict(list)
-for t in transactions:
-    if t["amount"] <= 0 or t["iban"] not in tenants:
-        continue
-    expected_any = [float(r["expected"]) for r in tenants[t["iban"]]]
-    is_rent = "miete" in t["text"].lower() or any(abs(t["amount"] - e) <= 10 for e in expected_any)
-    if is_rent:
-        received[(t["iban"], t["month"])] += t["amount"]
-        paid_on[(t["iban"], t["month"])] = max(paid_on[(t["iban"], t["month"])], t["day"])
-    else:
-        other[t["month"]].append((t["iban"], t["amount"], t["text"][:50]))
+def classify_transfers(transactions, tenants):
+    """Split each tenant transfer into rent (counted per month) or other."""
+    received = defaultdict(float)
+    paid_on = defaultdict(int)
+    other = defaultdict(list)
+    for t in transactions:
+        if t["amount"] <= 0 or t["iban"] not in tenants:
+            continue
+        expected_any = [float(r["expected"]) for r in tenants[t["iban"]]]
+        is_rent = "miete" in t["text"].lower() or any(abs(t["amount"] - e) <= 10 for e in expected_any)
+        if is_rent:
+            received[(t["iban"], t["month"])] += t["amount"]
+            paid_on[(t["iban"], t["month"])] = max(paid_on[(t["iban"], t["month"])], t["day"])
+        else:
+            other[t["month"]].append((t["iban"], t["amount"], t["text"][:50]))
+    return received, paid_on, other
+
 
 STATUS_DE = {"MISSING": "FEHLT", "LATE": "VERSPÄTET", "UNDERPAID": "ZU WENIG", "OVERPAID": "ZU VIEL"}
 
 
-def write_report(month, results, extras):
+def write_report(month, results, extras, tenants):
     total_expected = sum(r["expected"] for r in results)
     total_got = sum(r["got"] for r in results)
     problems = [r for r in results if r["status"] != "ok"]
@@ -102,58 +106,67 @@ def write_report(month, results, extras):
         f.write("\n".join(lines) + "\n")
 
 
-# Compare per month, per tenant
-credit = defaultdict(float)  # overpayments carried to the next month, per IBAN
-months = sorted({t["month"] for t in transactions})[1:-1]
-os.makedirs("output", exist_ok=True)
-for month in months:
-    print(f"\n=== {month} ===")
-    results = []
-    out = open(f"output/{month}.csv", "w", encoding="utf-8", newline="")
-    writer = csv.writer(out, delimiter=",")
-    writer.writerow(["tenant", "expected", "recieved", "status", "difference", "days_late"])
-    for iban, rows in tenants.items():
-        active = {}
-    current = {}
-    for rows in tenants.values():
-        for r in rows:
-            key = (r["house"], r["flat"], r["tenant"])
-            if r["valid_from"][:7] <= month and (key not in current or r["valid_from"] > current[key]["valid_from"]):
-                current[key] = r
-    by_iban = defaultdict(list)
-    for r in current.values():
-        by_iban[r["iban"]].append(r)
-    for iban, active in by_iban.items():
+def check_months(transactions, tenants, received, paid_on, other):
+    """Compare expected vs received per tenant for every complete month; print, write CSV + Bericht."""
+    # Compare per month, per tenant
+    credit = defaultdict(float)  # overpayments carried to the next month, per IBAN
+    months = sorted({t["month"] for t in transactions})[1:-1]
+    os.makedirs("output", exist_ok=True)
+    for month in months:
+        print(f"\n=== {month} ===")
+        results = []
+        out = open(f"output/{month}.csv", "w", encoding="utf-8", newline="")
+        writer = csv.writer(out, delimiter=",")
+        writer.writerow(["tenant", "expected", "recieved", "status", "difference", "days_late"])
+        for iban, rows in tenants.items():
+            active = {}
+        current = {}
+        for rows in tenants.values():
+            for r in rows:
+                key = (r["house"], r["flat"], r["tenant"])
+                if r["valid_from"][:7] <= month and (key not in current or r["valid_from"] > current[key]["valid_from"]):
+                    current[key] = r
+        by_iban = defaultdict(list)
+        for r in current.values():
+            by_iban[r["iban"]].append(r)
+        for iban, active in by_iban.items():
 
-        
-        expected = sum(float(r["expected"]) for r in active)
-        names = " + ".join(dict.fromkeys(r["tenant"] for r in active))
-        got = received.get((iban, month), 0)
-        paid = got
-        got += credit[iban]
-        credit[iban] = max(0.0, got - expected) if got > expected + 10 else 0.0
-        if credit[iban]:
-            got = expected
-        due = max(int(r["due_day"]) for r in active)
-        days_late = max(0, paid_on[(iban, month)] - due - BUFFER)
-        if got == 0:
-            status = "MISSING"
-        elif abs(got - expected) <= 10 and days_late > 0:
-            status = "LATE"
-        elif abs(got - expected) <= 10:
-            status = "ok"
-        elif got < expected:
-            status = "UNDERPAID"
-        else:
-            status = "OVERPAID"
-        print(f"{status:10s} {names:25s} {paid:.0f} of {expected:.0f}   paid day {paid_on[(iban, month)]:2d}  late {days_late}  credit {credit[iban]:.0f}")
-        results.append({"name": names, "expected": expected, "got": got, "status": status, "days_late": days_late, "credit": credit[iban]})
-        writer.writerow([names, f"{expected:.0f}", f"{got:.0f}", status, f"{got - expected:.0f}", days_late])
-    out.close()
-    write_report(month, results, other[month])
-    if other[month]:
-        print("  -- other transfers from tenants --")
-        for iban, amount, text in other[month]:
-            name = tenants[iban][0]["tenant"]
-            print(f"  {name:20s} {amount:8.2f}  {text}")
 
+            expected = sum(float(r["expected"]) for r in active)
+            names = " + ".join(dict.fromkeys(r["tenant"] for r in active))
+            got = received.get((iban, month), 0)
+            paid = got
+            got += credit[iban]
+            credit[iban] = max(0.0, got - expected) if got > expected + 10 else 0.0
+            if credit[iban]:
+                got = expected
+            due = max(int(r["due_day"]) for r in active)
+            days_late = max(0, paid_on[(iban, month)] - due - BUFFER)
+            if got == 0:
+                status = "MISSING"
+            elif abs(got - expected) <= 10 and days_late > 0:
+                status = "LATE"
+            elif abs(got - expected) <= 10:
+                status = "ok"
+            elif got < expected:
+                status = "UNDERPAID"
+            else:
+                status = "OVERPAID"
+            print(f"{status:10s} {names:25s} {paid:.0f} of {expected:.0f}   paid day {paid_on[(iban, month)]:2d}  late {days_late}  credit {credit[iban]:.0f}")
+            results.append({"name": names, "expected": expected, "got": got, "status": status, "days_late": days_late, "credit": credit[iban]})
+            writer.writerow([names, f"{expected:.0f}", f"{got:.0f}", status, f"{got - expected:.0f}", days_late])
+        out.close()
+        write_report(month, results, other[month], tenants)
+        if other[month]:
+            print("  -- other transfers from tenants --")
+            for iban, amount, text in other[month]:
+                name = tenants[iban][0]["tenant"]
+                print(f"  {name:20s} {amount:8.2f}  {text}")
+
+
+if __name__ == "__main__":
+    tenants = load_tenants("data/tenants.csv")
+    transactions = parse_mt940("data/umsaetze.txt")
+    print(len(transactions), "transactions")
+    received, paid_on, other = classify_transfers(transactions, tenants)
+    check_months(transactions, tenants, received, paid_on, other)
